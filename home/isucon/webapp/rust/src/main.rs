@@ -1494,7 +1494,6 @@ async fn post_icon_handler(
         .bind(user_id)
         .fetch_one(&mut *tx)
         .await?;
-    tx.commit().await?;
 
     use std::path::Path;
     use tokio::io::AsyncWriteExt;
@@ -1504,8 +1503,21 @@ async fn post_icon_handler(
         tokio::fs::remove_file(&file_path).await?;
     }
     let mut file = tokio::fs::File::create(&file_path).await?;
+    let emp: Vec<u8> = vec![0];
     file.write_all(&req.image).await?;
-    Ok((StatusCode::CREATED, axum::Json(PostIconResponse { id: 0 })))
+    let rs = sqlx::query("INSERT INTO icons (user_id, image) VALUES (?, ?)")
+        .bind(user_id)
+        .bind(emp)
+        .execute(&mut *tx)
+        .await?;
+    tx.commit().await?;
+
+    let icon_id = rs.last_insert_id() as i64;
+
+    Ok((
+        StatusCode::CREATED,
+        axum::Json(PostIconResponse { id: icon_id }),
+    ))
 }
 
 async fn get_me_handler(
