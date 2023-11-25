@@ -788,7 +788,7 @@ async fn fill_livestream_response(
         .await?;
     let owner = fill_user_response(tx, owner_model).await?;
 
-    let tags: Vec<Tag> = sqlx::query_as("SELECT t.id id, t.name name FROM livestream_tags lt INNER JOIN tags t ON lt.tag_id = t.id WHERE lt.livestream_id = 1")
+    let tags: Vec<Tag> = sqlx::query_as("SELECT t.id id, t.name name FROM livestream_tags lt INNER JOIN tags t ON lt.tag_id = t.id WHERE lt.livestream_id = ?")
         .bind(livestream_model.id)
         .fetch_all(&mut *tx)
         .await?;
