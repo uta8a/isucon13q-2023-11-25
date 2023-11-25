@@ -237,10 +237,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/user/:username/statistics",
             axum::routing::get(get_user_statistics_handler),
         )
-        .route(
-            "/api/user/:username/icon",
-            axum::routing::get(get_icon_handler),
-        )
+        // .route(
+        //     "/api/user/:username/icon",
+        //     axum::routing::get(get_icon_handler),
+        // )
         .route("/api/icon", axum::routing::post(post_icon_handler))
         // stats
         // ライブ配信統計情報
@@ -1444,35 +1444,35 @@ struct PostIconResponse {
     id: i64,
 }
 
-async fn get_icon_handler(
-    State(AppState { pool, .. }): State<AppState>,
-    Path((username,)): Path<(String,)>,
-) -> Result<axum::response::Response, Error> {
-    use axum::response::IntoResponse as _;
+// async fn get_icon_handler(
+//     State(AppState { pool, .. }): State<AppState>,
+//     Path((username,)): Path<(String,)>,
+// ) -> Result<axum::response::Response, Error> {
+//     use axum::response::IntoResponse as _;
 
-    let mut tx = pool.begin().await?;
+//     let mut tx = pool.begin().await?;
 
-    let user: UserModel = sqlx::query_as("SELECT * FROM users WHERE name = ?")
-        .bind(username)
-        .fetch_one(&mut *tx)
-        .await?;
+//     let user: UserModel = sqlx::query_as("SELECT * FROM users WHERE name = ?")
+//         .bind(username)
+//         .fetch_one(&mut *tx)
+//         .await?;
 
-    let image: Option<Vec<u8>> = sqlx::query_scalar("SELECT image FROM icons WHERE user_id = ?")
-        .bind(user.id)
-        .fetch_optional(&mut *tx)
-        .await?;
+//     let image: Option<Vec<u8>> = sqlx::query_scalar("SELECT image FROM icons WHERE user_id = ?")
+//         .bind(user.id)
+//         .fetch_optional(&mut *tx)
+//         .await?;
 
-    let headers = [(axum::http::header::CONTENT_TYPE, "image/jpeg")];
-    if let Some(image) = image {
-        Ok((headers, image).into_response())
-    } else {
-        let file = tokio::fs::File::open(FALLBACK_IMAGE).await.unwrap();
-        let stream = tokio_util::io::ReaderStream::new(file);
-        let body = axum::body::StreamBody::new(stream);
+//     let headers = [(axum::http::header::CONTENT_TYPE, "image/jpeg")];
+//     if let Some(image) = image {
+//         Ok((headers, image).into_response())
+//     } else {
+//         let file = tokio::fs::File::open(FALLBACK_IMAGE).await.unwrap();
+//         let stream = tokio_util::io::ReaderStream::new(file);
+//         let body = axum::body::StreamBody::new(stream);
 
-        Ok((headers, body).into_response())
-    }
-}
+//         Ok((headers, body).into_response())
+//     }
+// }
 
 async fn post_icon_handler(
     State(AppState { pool, .. }): State<AppState>,
@@ -1490,19 +1490,29 @@ async fn post_icon_handler(
 
     let mut tx = pool.begin().await?;
 
-    sqlx::query("DELETE FROM icons WHERE user_id = ?")
+    let username: String = sqlx::query_scalar("SELECT name FROM users WHERE id = ?")
         .bind(user_id)
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
 
+    use std::path::Path;
+    use tokio::io::AsyncWriteExt;
+
+    let file_path = format!("/home/isucon/webapp/public/usermedia/{}.jpg", username);
+    if Path::new(&file_path).exists() {
+        tokio::fs::remove_file(&file_path).await?;
+    }
+    let mut file = tokio::fs::File::create(&file_path).await?;
+    let emp: Vec<u8> = vec![0];
+    file.write_all(&req.image).await?;
     let rs = sqlx::query("INSERT INTO icons (user_id, image) VALUES (?, ?)")
         .bind(user_id)
-        .bind(req.image)
+        .bind(emp)
         .execute(&mut *tx)
         .await?;
-    let icon_id = rs.last_insert_id() as i64;
-
     tx.commit().await?;
+
+    let icon_id = rs.last_insert_id() as i64;
 
     Ok((
         StatusCode::CREATED,
@@ -1712,14 +1722,19 @@ async fn fill_user_response(tx: &mut MySqlConnection, user_model: UserModel) -> 
         .fetch_one(&mut *tx)
         .await?;
 
-    let image: Option<Vec<u8>> = sqlx::query_scalar("SELECT image FROM icons WHERE user_id = ?")
+    let username: String = sqlx::query_scalar("SELECT name FROM users WHERE id = ?")
         .bind(user_model.id)
-        .fetch_optional(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
-    let image = if let Some(image) = image {
-        image
-    } else {
+
+    use std::path::Path;
+
+    let file_path = format!("/home/isucon/webapp/public/usermedia/{}.jpg", username);
+    let image = if !Path::new(&file_path).exists() {
+        // 存在しなければfallback
         tokio::fs::read(FALLBACK_IMAGE).await?
+    } else {
+        tokio::fs::read(&file_path).await?
     };
     use sha2::digest::Digest as _;
     let icon_hash = sha2::Sha256::digest(image);
@@ -1744,12 +1759,6 @@ struct LivestreamStatistics {
     total_reactions: i64,
     total_reports: i64,
     max_tip: i64,
-}
-
-#[derive(Debug)]
-struct LivestreamRankingEntry {
-    livestream_id: i64,
-    score: i64,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -1956,11 +1965,6 @@ async fn get_livestream_statistics_handler(
 
     let mut tx = pool.begin().await?;
 
-    #[derive(Debug, sqlx::FromRow)]
-    struct Data {
-        score: MysqlDecimal,
-        id: MysqlDecimal,
-    }
     let MysqlDecimal(rank) = sqlx::query_scalar(
         r##"SELECT a.ranking ranking
   FROM (
@@ -2029,11 +2033,6 @@ WHERE a.id = ?"##,
     .bind(livestream_id)
     .fetch_one(&mut *tx)
     .await?;
-    // ranking.sort_by(|a, b| {
-    //     a.score
-    //         .cmp(&b.score)
-    //         .then_with(|| a.livestream_id.cmp(&b.livestream_id))
-    // });
 
     // 視聴者数算出
     let MysqlDecimal(viewers_count) = sqlx::query_scalar("SELECT COUNT(*) FROM livestreams l INNER JOIN livestream_viewers_history h ON h.livestream_id = l.id WHERE l.id = ?")

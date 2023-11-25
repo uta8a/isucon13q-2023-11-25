@@ -147,7 +147,6 @@
 /home/isucon/pprof/
 /home/isucon/initial_data*
 /home/isucon/tmp/
-/home/isucon/webapp/sql/
 /home/isucon/.*
 /home/isucon/webapp/ruby/
 /home/isucon/webapp/go/
@@ -158,7 +157,6 @@
 /home/isucon/webapp/php/
 /home/isucon/webapp/public/
 /home/isucon/webapp/python/
-/home/isucon/webapp/sql/
 /home/isucon/webapp/rust/target/
 
 
