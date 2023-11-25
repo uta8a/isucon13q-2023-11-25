@@ -237,10 +237,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             "/api/user/:username/statistics",
             axum::routing::get(get_user_statistics_handler),
         )
-        .route(
-            "/api/user/:username/icon",
-            axum::routing::get(get_icon_handler),
-        )
+        // .route(
+        //     "/api/user/:username/icon",
+        //     axum::routing::get(get_icon_handler),
+        // )
         .route("/api/icon", axum::routing::post(post_icon_handler))
         // stats
         // ライブ配信統計情報
@@ -1444,35 +1444,35 @@ struct PostIconResponse {
     id: i64,
 }
 
-async fn get_icon_handler(
-    State(AppState { pool, .. }): State<AppState>,
-    Path((username,)): Path<(String,)>,
-) -> Result<axum::response::Response, Error> {
-    use axum::response::IntoResponse as _;
+// async fn get_icon_handler(
+//     State(AppState { pool, .. }): State<AppState>,
+//     Path((username,)): Path<(String,)>,
+// ) -> Result<axum::response::Response, Error> {
+//     use axum::response::IntoResponse as _;
 
-    let mut tx = pool.begin().await?;
+//     let mut tx = pool.begin().await?;
 
-    let user: UserModel = sqlx::query_as("SELECT * FROM users WHERE name = ?")
-        .bind(username)
-        .fetch_one(&mut *tx)
-        .await?;
+//     let user: UserModel = sqlx::query_as("SELECT * FROM users WHERE name = ?")
+//         .bind(username)
+//         .fetch_one(&mut *tx)
+//         .await?;
 
-    let image: Option<Vec<u8>> = sqlx::query_scalar("SELECT image FROM icons WHERE user_id = ?")
-        .bind(user.id)
-        .fetch_optional(&mut *tx)
-        .await?;
+//     let image: Option<Vec<u8>> = sqlx::query_scalar("SELECT image FROM icons WHERE user_id = ?")
+//         .bind(user.id)
+//         .fetch_optional(&mut *tx)
+//         .await?;
 
-    let headers = [(axum::http::header::CONTENT_TYPE, "image/jpeg")];
-    if let Some(image) = image {
-        Ok((headers, image).into_response())
-    } else {
-        let file = tokio::fs::File::open(FALLBACK_IMAGE).await.unwrap();
-        let stream = tokio_util::io::ReaderStream::new(file);
-        let body = axum::body::StreamBody::new(stream);
+//     let headers = [(axum::http::header::CONTENT_TYPE, "image/jpeg")];
+//     if let Some(image) = image {
+//         Ok((headers, image).into_response())
+//     } else {
+//         let file = tokio::fs::File::open(FALLBACK_IMAGE).await.unwrap();
+//         let stream = tokio_util::io::ReaderStream::new(file);
+//         let body = axum::body::StreamBody::new(stream);
 
-        Ok((headers, body).into_response())
-    }
-}
+//         Ok((headers, body).into_response())
+//     }
+// }
 
 async fn post_icon_handler(
     State(AppState { pool, .. }): State<AppState>,
@@ -1711,14 +1711,21 @@ async fn fill_user_response(tx: &mut MySqlConnection, user_model: UserModel) -> 
         .fetch_one(&mut *tx)
         .await?;
 
-    let image: Option<Vec<u8>> = sqlx::query_scalar("SELECT image FROM icons WHERE user_id = ?")
+    let username: String = sqlx::query_scalar("SELECT name FROM users WHERE id = ?")
         .bind(user_model.id)
-        .fetch_optional(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
-    let image = if let Some(image) = image {
-        image
-    } else {
+
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::Path;
+
+    let file_path = format!("/home/isucon/usermedia/{}.jpg", username);
+    let image = if (!Path::new(&file_path).exists()) {
+        // 存在しなければfallback
         tokio::fs::read(FALLBACK_IMAGE).await?
+    } else {
+        tokio::fs::read(&file_path).await?
     };
     use sha2::digest::Digest as _;
     let icon_hash = sha2::Sha256::digest(image);
