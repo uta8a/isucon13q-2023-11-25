@@ -1962,7 +1962,7 @@ async fn get_livestream_statistics_handler(
         id: MysqlDecimal,
     }
     let MysqlDecimal(rank) = sqlx::query_scalar(
-        r##"SELECT a.ranking - 1 ranking
+        r##"SELECT a.ranking ranking
   FROM (
   SELECT a.score score, a.id id, ROW_NUMBER() OVER (ORDER BY a.score DESC, a.id DESC) ranking
   FROM
