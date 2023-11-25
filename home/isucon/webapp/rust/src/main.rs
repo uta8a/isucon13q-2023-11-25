@@ -381,7 +381,7 @@ struct LivestreamTagModel {
     #[allow(unused)]
     id: i64,
     livestream_id: i64,
-    _tag_id: i64,
+    tag_id: i64,
 }
 
 #[derive(Debug, sqlx::FromRow)]
