@@ -381,7 +381,7 @@ struct LivestreamTagModel {
     #[allow(unused)]
     id: i64,
     livestream_id: i64,
-    tag_id: i64,
+    _tag_id: i64,
 }
 
 #[derive(Debug, sqlx::FromRow)]
@@ -1758,12 +1758,6 @@ struct UserStatistics {
     favorite_emoji: String,
 }
 
-#[derive(Debug)]
-struct UserRankingEntry {
-    username: String,
-    score: i64,
-}
-
 /// MySQL で COUNT()、SUM() 等を使って DECIMAL 型の値になったものを i64 に変換するための構造体。
 #[derive(Debug)]
 struct MysqlDecimal(i64);
@@ -1823,52 +1817,79 @@ async fn get_user_statistics_handler(
         .await?
         .ok_or(Error::BadRequest("".into()))?;
 
-    // ランク算出
-    let users: Vec<UserModel> = sqlx::query_as("SELECT * FROM users")
-        .fetch_all(&mut *tx)
+    let MysqlDecimal(rank) = sqlx::query_scalar(r##"SELECT a.ranking ranking
+    FROM (
+      SELECT a.score score, a.id id, ROW_NUMBER() OVER (ORDER BY a.score DESC, uz.name DESC) ranking, uz.name username
+      FROM (
+        SELECT reactions + tips score, t.id id
+        FROM
+        (
+          SELECT COUNT(*) reactions, u.id id
+            FROM users u
+            INNER JOIN livestreams l ON l.user_id = u.id
+            INNER JOIN reactions r ON r.livestream_id = l.id
+            GROUP BY u.id
+        ) r
+        RIGHT JOIN
+        (
+          SELECT IFNULL(SUM(l2.tip), 0) tips, u.id id
+          FROM users u
+            INNER JOIN livestreams l ON l.user_id = u.id
+            INNER JOIN livecomments l2 ON l2.livestream_id = l.id
+            GROUP BY u.id
+          UNION
+          SELECT 0 tips, u.id id
+            FROM users u
+            WHERE id NOT IN
+            (
+              SELECT u.id
+              FROM users u
+                INNER JOIN livestreams l ON l.user_id = u.id
+                INNER JOIN livecomments l2 ON l2.livestream_id = l.id
+                GROUP BY u.id
+            )
+        ) t ON r.id = t.id
+        UNION
+        SELECT 0 score, id
+          FROM users
+          WHERE id NOT IN
+          (
+            SELECT t.id
+            FROM
+            (
+              SELECT COUNT(*) reactions, u.id id
+                FROM users u
+                INNER JOIN livestreams l ON l.user_id = u.id
+                INNER JOIN reactions r ON r.livestream_id = l.id
+                GROUP BY u.id
+            ) r
+            RIGHT JOIN
+            (
+              SELECT IFNULL(SUM(l2.tip), 0) tips, u.id id
+              FROM users u
+                INNER JOIN livestreams l ON l.user_id = u.id
+                INNER JOIN livecomments l2 ON l2.livestream_id = l.id
+                GROUP BY u.id
+              UNION
+              SELECT 0 tips, u.id id
+                FROM users u
+                WHERE id NOT IN
+                (
+                  SELECT u.id
+                  FROM users u
+                    INNER JOIN livestreams l ON l.user_id = u.id
+                    INNER JOIN livecomments l2 ON l2.livestream_id = l.id
+                    GROUP BY u.id
+                )
+            ) t ON r.id = t.id
+          )
+        ) a
+        INNER JOIN users uz ON a.id = uz.id
+       ) a
+     WHERE a.id = ?"##)
+        .bind(user.id)
+        .fetch_one(&mut *tx)
         .await?;
-
-    let mut ranking = Vec::new();
-    for user in users {
-        let query = r#"
-        SELECT COUNT(*) FROM users u
-        INNER JOIN livestreams l ON l.user_id = u.id
-        INNER JOIN reactions r ON r.livestream_id = l.id
-        WHERE u.id = ?
-        "#;
-        let MysqlDecimal(reactions) = sqlx::query_scalar(query)
-            .bind(user.id)
-            .fetch_one(&mut *tx)
-            .await?;
-
-        let query = r#"
-        SELECT IFNULL(SUM(l2.tip), 0) FROM users u
-        INNER JOIN livestreams l ON l.user_id = u.id
-        INNER JOIN livecomments l2 ON l2.livestream_id = l.id
-        WHERE u.id = ?
-        "#;
-        let MysqlDecimal(tips) = sqlx::query_scalar(query)
-            .bind(user.id)
-            .fetch_one(&mut *tx)
-            .await?;
-
-        let score = reactions + tips;
-        ranking.push(UserRankingEntry {
-            username: user.name,
-            score,
-        });
-    }
-    ranking.sort_by(|a, b| {
-        a.score
-            .cmp(&b.score)
-            .then_with(|| a.username.cmp(&b.username))
-    });
-
-    let rpos = ranking
-        .iter()
-        .rposition(|entry| entry.username == username)
-        .unwrap();
-    let rank = (ranking.len() - rpos) as i64;
 
     // リアクション数
     let query = r"#
