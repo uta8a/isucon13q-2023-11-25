@@ -1964,7 +1964,7 @@ async fn get_livestream_statistics_handler(
 
     #[derive(Debug, sqlx::FromRow)]
     struct Data {
-        score: i64,
+        score: MysqlDecimal,
         id: i64,
     }
     let strms: Vec<Data> = sqlx::query_as(r##"SELECT reactions + tips score, t.id FROM (SELECT COUNT(*) reactions, l.id id FROM livestreams l INNER JOIN reactions r ON l.id = r.livestream_id GROUP BY l.id) r INNER JOIN (SELECT IFNULL(SUM(l2.tip), 0) tips, l.id id FROM livestreams l
@@ -1975,9 +1975,13 @@ async fn get_livestream_statistics_handler(
     // ランク算出
     let mut ranking = Vec::new();
     for strm in strms {
+        let Data {
+            id,
+            score: MysqlDecimal(score),
+        } = strm;
         ranking.push(LivestreamRankingEntry {
-            livestream_id: strm.id,
-            score: strm.score,
+            livestream_id: id,
+            score: score as i64,
         })
     }
     // ranking.sort_by(|a, b| {
