@@ -2024,7 +2024,7 @@ async fn get_livestream_statistics_handler(
     ORDER BY score DESC, id
   ) a
 ) a
-WHERE a.id = 7496"##,
+WHERE a.id = ?"##,
     )
     .bind(livestream_id)
     .fetch_one(&mut *tx)
