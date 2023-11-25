@@ -270,7 +270,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     Ok(())
 }
 
-#[derive(Debug, serde::Serialize)]
+#[derive(Debug, serde::Serialize, sqlx::FromRow)]
 struct Tag {
     id: i64,
     name: String,
@@ -788,23 +788,10 @@ async fn fill_livestream_response(
         .await?;
     let owner = fill_user_response(tx, owner_model).await?;
 
-    let livestream_tag_models: Vec<LivestreamTagModel> =
-        sqlx::query_as("SELECT * FROM livestream_tags WHERE livestream_id = ?")
-            .bind(livestream_model.id)
-            .fetch_all(&mut *tx)
-            .await?;
-
-    let mut tags = Vec::with_capacity(livestream_tag_models.len());
-    for livestream_tag_model in livestream_tag_models {
-        let tag_model: TagModel = sqlx::query_as("SELECT * FROM tags WHERE id = ?")
-            .bind(livestream_tag_model.tag_id)
-            .fetch_one(&mut *tx)
-            .await?;
-        tags.push(Tag {
-            id: tag_model.id,
-            name: tag_model.name,
-        });
-    }
+    let tags: Vec<Tag> = sqlx::query_as("SELECT t.id id, t.name name FROM livestream_tags lt INNER JOIN tags t ON lt.tag_id = t.id WHERE lt.livestream_id = ?")
+        .bind(livestream_model.id)
+        .fetch_all(&mut *tx)
+        .await?;
 
     Ok(Livestream {
         id: livestream_model.id,
