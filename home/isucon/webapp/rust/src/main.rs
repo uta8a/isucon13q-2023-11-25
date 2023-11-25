@@ -1716,8 +1716,6 @@ async fn fill_user_response(tx: &mut MySqlConnection, user_model: UserModel) -> 
         .fetch_one(&mut *tx)
         .await?;
 
-    use std::fs::File;
-    use std::io::Write;
     use std::path::Path;
 
     let file_path = format!("/home/isucon/usermedia/{}.jpg", username);
@@ -1962,11 +1960,6 @@ async fn get_livestream_statistics_handler(
 
     let mut tx = pool.begin().await?;
 
-    #[derive(Debug, sqlx::FromRow)]
-    struct Data {
-        score: MysqlDecimal,
-        id: MysqlDecimal,
-    }
     let MysqlDecimal(rank) = sqlx::query_scalar(
         r##"SELECT a.ranking ranking
   FROM (
@@ -2035,11 +2028,6 @@ WHERE a.id = ?"##,
     .bind(livestream_id)
     .fetch_one(&mut *tx)
     .await?;
-    // ranking.sort_by(|a, b| {
-    //     a.score
-    //         .cmp(&b.score)
-    //         .then_with(|| a.livestream_id.cmp(&b.livestream_id))
-    // });
 
     // 視聴者数算出
     let MysqlDecimal(viewers_count) = sqlx::query_scalar("SELECT COUNT(*) FROM livestreams l INNER JOIN livestream_viewers_history h ON h.livestream_id = l.id WHERE l.id = ?")
