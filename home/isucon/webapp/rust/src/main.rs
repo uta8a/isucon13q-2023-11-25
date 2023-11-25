@@ -1490,24 +1490,23 @@ async fn post_icon_handler(
 
     let mut tx = pool.begin().await?;
 
-    sqlx::query("DELETE FROM icons WHERE user_id = ?")
+    let username: String = sqlx::query_scalar("SELECT name FROM users WHERE id = ?")
         .bind(user_id)
-        .execute(&mut *tx)
+        .fetch_one(&mut *tx)
         .await?;
-
-    let rs = sqlx::query("INSERT INTO icons (user_id, image) VALUES (?, ?)")
-        .bind(user_id)
-        .bind(req.image)
-        .execute(&mut *tx)
-        .await?;
-    let icon_id = rs.last_insert_id() as i64;
-
     tx.commit().await?;
 
-    Ok((
-        StatusCode::CREATED,
-        axum::Json(PostIconResponse { id: icon_id }),
-    ))
+    use std::fs::File;
+    use std::io::Write;
+    use std::path::Path;
+
+    let file_path = format!("/home/isucon/usermedia/{}.jpg", username);
+    if (Path::new(&file_path).exists()) {
+        std::fs::remove_file(&file_path)?;
+    }
+    let mut file = File::create(&file_path)?;
+    file.write_all(&req.image)?;
+    Ok((StatusCode::CREATED, axum::Json(PostIconResponse { id: 0 })))
 }
 
 async fn get_me_handler(
