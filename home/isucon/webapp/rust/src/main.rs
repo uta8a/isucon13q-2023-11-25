@@ -1962,48 +1962,69 @@ async fn get_livestream_statistics_handler(
         id: MysqlDecimal,
     }
     let MysqlDecimal(rank) = sqlx::query_scalar(
-        r##"SELECT a.ranking ranking
-        FROM (
-        SELECT a.score score, a.id id, ROW_NUMBER() OVER (ORDER BY a.score DESC, a.id) ranking
-        FROM
-        (
-          SELECT reactions + tips score, t.id id
-            FROM
-            (
-              SELECT COUNT(*) reactions, l.id id FROM livestreams l
-                INNER JOIN reactions r ON l.id = r.livestream_id GROUP BY l.id
-            ) r
-            INNER JOIN
-            (
-              SELECT IFNULL(SUM(l2.tip), 0) tips, l.id id
-                FROM livestreams l
-                INNER JOIN livecomments l2 ON l.id = l2.livestream_id
-                GROUP BY (l.id)
-            ) t ON r.id = t.id
-          UNION
-          SELECT 0 score, id
-            FROM livestreams
-            WHERE id NOT IN
-            (
-              SELECT t.id
-                FROM
-                (
-                  SELECT COUNT(*) reactions, l.id id
+        r##"SELECT a.ranking - 1 ranking
+  FROM (
+  SELECT a.score score, a.id id, ROW_NUMBER() OVER (ORDER BY a.score DESC, a.id DESC) ranking
+  FROM
+  (
+    SELECT reactions + tips score, t.id id
+      FROM
+      (
+        SELECT COUNT(*) reactions, l.id id FROM livestreams l
+          INNER JOIN reactions r ON l.id = r.livestream_id
+          GROUP BY l.id
+      ) r
+      RIGHT JOIN
+      (
+        SELECT IFNULL(SUM(l2.tip), 0) tips, l.id id
+          FROM livestreams l
+          INNER JOIN livecomments l2 ON l.id = l2.livestream_id
+          GROUP BY (l.id)
+        UNION
+        SELECT 0 tips, l.id id
+          FROM livestreams l
+          WHERE id NOT IN
+          (
+            SELECT l.id
+              FROM livestreams l
+              INNER JOIN livecomments l2 ON l.id = l2.livestream_id
+              GROUP BY (l.id)
+          )
+      ) t ON r.id = t.id
+    UNION
+    SELECT 0 score, id
+      FROM livestreams
+      WHERE id NOT IN
+      (
+        SELECT t.id
+          FROM
+          (
+            SELECT COUNT(*) reactions, l.id id FROM livestreams l
+              INNER JOIN reactions r ON l.id = r.livestream_id
+              GROUP BY l.id
+          ) r
+          RIGHT JOIN
+          (
+            SELECT IFNULL(SUM(l2.tip), 0) tips, l.id id
+              FROM livestreams l
+              INNER JOIN livecomments l2 ON l.id = l2.livestream_id
+              GROUP BY (l.id)
+            UNION
+            SELECT 0 tips, l.id id
+              FROM livestreams l
+              WHERE id NOT IN
+              (
+                SELECT l.id
                   FROM livestreams l
-                  INNER JOIN reactions r ON l.id = r.livestream_id GROUP BY l.id
-                ) r
-                INNER JOIN
-                (
-                  SELECT IFNULL(SUM(l2.tip), 0) tips, l.id id
-                    FROM livestreams l
-                    INNER JOIN livecomments l2 ON l.id = l2.livestream_id
-                    GROUP BY (l.id)
-                ) t ON r.id = t.id
-            )
-          ORDER BY score DESC, id
-        ) a
-      ) a
-      WHERE a.id = ?"##,
+                  INNER JOIN livecomments l2 ON l.id = l2.livestream_id
+                  GROUP BY (l.id)
+              )
+          ) t ON r.id = t.id
+      )
+    ORDER BY score DESC, id
+  ) a
+) a
+WHERE a.id = 7496"##,
     )
     .bind(livestream_id)
     .fetch_one(&mut *tx)
