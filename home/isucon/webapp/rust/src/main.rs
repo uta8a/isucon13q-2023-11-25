@@ -1501,7 +1501,7 @@ async fn post_icon_handler(
     use std::path::Path;
 
     let file_path = format!("/home/isucon/usermedia/{}.jpg", username);
-    if (Path::new(&file_path).exists()) {
+    if Path::new(&file_path).exists() {
         std::fs::remove_file(&file_path)?;
     }
     let mut file = File::create(&file_path)?;
@@ -1719,7 +1719,7 @@ async fn fill_user_response(tx: &mut MySqlConnection, user_model: UserModel) -> 
     use std::path::Path;
 
     let file_path = format!("/home/isucon/usermedia/{}.jpg", username);
-    let image = if (!Path::new(&file_path).exists()) {
+    let image = if !Path::new(&file_path).exists() {
         // 存在しなければfallback
         tokio::fs::read(FALLBACK_IMAGE).await?
     } else {
@@ -1748,12 +1748,6 @@ struct LivestreamStatistics {
     total_reactions: i64,
     total_reports: i64,
     max_tip: i64,
-}
-
-#[derive(Debug)]
-struct LivestreamRankingEntry {
-    livestream_id: i64,
-    score: i64,
 }
 
 #[derive(Debug, serde::Serialize)]
