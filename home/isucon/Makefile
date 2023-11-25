@@ -1,7 +1,7 @@
 .PHONY: clear_logs
 clear_logs:
-	truncate -s 0 /var/log/nginx/isu-access.log
-	truncate -s 0 /var/log/mysql/mysql-slow.log
+	sudo truncate -s 0 /var/log/nginx/isu-access.log
+	sudo truncate -s 0 /var/log/mysql/mysql-slow.log
 
 .PHONY: alp
 alp:
