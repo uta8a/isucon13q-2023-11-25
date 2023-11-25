@@ -1496,16 +1496,15 @@ async fn post_icon_handler(
         .await?;
     tx.commit().await?;
 
-    use std::fs::File;
-    use std::io::Write;
     use std::path::Path;
+    use tokio::io::AsyncWriteExt;
 
-    let file_path = format!("/home/isucon/usermedia/{}.jpg", username);
+    let file_path = format!("/home/isucon/webapp/public/usermedia/{}.jpg", username);
     if Path::new(&file_path).exists() {
-        std::fs::remove_file(&file_path)?;
+        tokio::fs::remove_file(&file_path).await?;
     }
-    let mut file = File::create(&file_path)?;
-    file.write_all(&req.image)?;
+    let mut file = tokio::fs::File::create(&file_path).await?;
+    file.write_all(&req.image).await?;
     Ok((StatusCode::CREATED, axum::Json(PostIconResponse { id: 0 })))
 }
 
@@ -1718,7 +1717,7 @@ async fn fill_user_response(tx: &mut MySqlConnection, user_model: UserModel) -> 
 
     use std::path::Path;
 
-    let file_path = format!("/home/isucon/usermedia/{}.jpg", username);
+    let file_path = format!("/home/isucon/webapp/public/usermedia/{}.jpg", username);
     let image = if !Path::new(&file_path).exists() {
         // 存在しなければfallback
         tokio::fs::read(FALLBACK_IMAGE).await?
