@@ -2000,7 +2000,7 @@ async fn get_livestream_statistics_handler(
                     GROUP BY (l.id)
                 ) t ON r.id = t.id
             )
-          ORDER BY score DESC, id
+          ORDER BY score DESC, id DESC
         ) a
       ) a
       WHERE a.id = ?"##,
